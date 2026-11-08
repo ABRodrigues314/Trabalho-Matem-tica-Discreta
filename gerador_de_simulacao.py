@@ -116,7 +116,7 @@ def _set_arestas(vertices: dict) -> dict:
     return lista_de_arestas
 
 
-def _set_rotulos(dict_de_vertices: dict, dict_de_arestas: dict, limite_inferior, limite_superior,  variacao=1) -> dict:
+def _set_rotulos(dict_de_vertices: dict, dict_de_arestas: dict, n_vertices_aleatorios: int, limite_inferior: int, limite_superior: int,  variacao=1) -> dict:
     """Define os rótulos dos vértices usando interpolação.
 
     Alguns vértices recebem rótulos aleatórios e os demais têm seus rótulos
@@ -135,12 +135,12 @@ def _set_rotulos(dict_de_vertices: dict, dict_de_arestas: dict, limite_inferior,
     dict_rotulos = {}
     vertice_aleatorio = 0
 
-    if len(dict_de_vertices) < 12:
+    if len(dict_de_vertices) <= 2:
+        raise ValueError("Macho, tem que ter no mínimo 3 vértices né?")
+    elif len(dict_de_vertices) < n_vertices_aleatorios*2:
         numero_de_vertices_aleatorios = 2
-    elif len(dict_de_vertices) <= 2:
-        raise ValueError("Macho, tem que ter, no mínimo, 2 vértices né?")
     else:
-        numero_de_vertices_aleatorios = round(len(dict_de_vertices) / 6)
+        numero_de_vertices_aleatorios = round(len(dict_de_vertices) / n_vertices_aleatorios)
 
     # Definindo pontos aleatórios
     while len(dict_rotulos) != numero_de_vertices_aleatorios:
@@ -179,17 +179,23 @@ def _set_rotulos(dict_de_vertices: dict, dict_de_arestas: dict, limite_inferior,
             peso_1, vertice1 = dois_vizinhos[0]
             peso_2, vertice2 = dois_vizinhos[1]
 
+            if variacao < 0:
+                raise ValueError("A variação não pode ser negativa.")
+
+            influencia_1 = peso_1 ** (-variacao)
+            influencia_2 = peso_2 ** (-variacao)
+
             rotulo_atual = round((
-                dict_rotulos[vertice1] * (peso_2) +
-                dict_rotulos[vertice2] * (peso_1)
-            ) / ((peso_1 + peso_2)), 2)
+                dict_rotulos[vertice1] * influencia_1 +
+                dict_rotulos[vertice2] * influencia_2
+            ) / (influencia_1 + influencia_2), 2)
 
             dict_rotulos[vertice_aleatorio] = rotulo_atual
 
     return dict_rotulos
 
 
-def _set_cores(dict_de_vertices: dict, dict_de_arestas: dict, limite_inferior, limite_superior, variacao=1) -> dict:
+def _set_cores(dict_de_vertices: dict, dict_de_arestas: dict, n_vertices_aleatorios: int, limite_inferior: int, limite_superior: int, variacao=1) -> dict:
     """Define as cores RGB dos vértices usando interpolação.
 
     Alguns vértices recebem cores aleatórias e os demais têm suas cores
@@ -215,11 +221,11 @@ def _set_cores(dict_de_vertices: dict, dict_de_arestas: dict, limite_inferior, l
     if len(dict_de_vertices) < 2:
         raise ValueError("É necessário ter pelo menos 2 vértices.")
 
-    if len(dict_de_vertices) < 12:
+    if len(dict_de_vertices) < n_vertices_aleatorios*2:
         numero_de_vertices_aleatorios = 2
     else:
         numero_de_vertices_aleatorios = round(
-            len(dict_de_vertices) / 6
+            len(dict_de_vertices) / n_vertices_aleatorios
         )
 
     # Definindo cores aleatórias
@@ -276,13 +282,20 @@ def _set_cores(dict_de_vertices: dict, dict_de_arestas: dict, limite_inferior, l
             peso_2, vertice2 = dois_vizinhos[1]
 
             # Interpolando individualmente os canais RGB
+            if variacao < 0:
+                raise ValueError("A variação não pode ser negativa.")
+            
+            influencia_1 = peso_1 ** (-variacao)
+            influencia_2 = peso_2 ** (-variacao)
+
             cor_atual = tuple(
                 round(
                     (
-                        dict_cores[vertice1][i] * (peso_2) +
-                        dict_cores[vertice2][i] * (peso_1)
-                    ) / ((peso_1 + peso_2))
+                        dict_cores[vertice1][i] * influencia_1 +
+                        dict_cores[vertice2][i] * influencia_2
+                    ) / (influencia_1 + influencia_2)
                 )
+
                 for i in range(3)
             )
 
@@ -291,7 +304,7 @@ def _set_cores(dict_de_vertices: dict, dict_de_arestas: dict, limite_inferior, l
     return dict_cores
 
 
-def gerar_simulacao(numero_de_possiveis_pontos: int, tamanho_do_mapa: int, limites_rotulos = (6, 10), limites_cores = (50,255), variacao=1, imprimir=False, plotar=False) -> dict:
+def gerar_simulacao(numero_de_possiveis_pontos: int, tamanho_do_mapa: int, seed = 0, n_vertices_aleatorios = 6, limites_rotulos = (6, 10), limites_cores = (50,255), contraste=1, imprimir=False, plotar=False, usar_seed=False) -> dict:
     """Gera uma simulação completa de uma cidade com pontos de ônibus.
 
     Executa todas as etapas da geração (mapa, posições, vértices, arestas,
@@ -315,6 +328,8 @@ def gerar_simulacao(numero_de_possiveis_pontos: int, tamanho_do_mapa: int, limit
         ValueError: Se ``numero_de_possiveis_pontos`` for maior que o número
             de células do mapa.
     """
+    if usar_seed:
+        random.seed(seed)
 
     if numero_de_possiveis_pontos > tamanho_do_mapa ** 2:
         raise ValueError("O quadrado do tamanho do mapa deve ser maior que o numero de possiveis pontos")
@@ -323,8 +338,8 @@ def gerar_simulacao(numero_de_possiveis_pontos: int, tamanho_do_mapa: int, limit
     posicoes = _set_posicao(mapa)
     vertices = _nomear_vertices(posicoes)
     arestas = _set_arestas(vertices)
-    rotulos = _set_rotulos(vertices, arestas, limites_rotulos[0], limites_rotulos[1], variacao=variacao)
-    cores = _set_cores(vertices, arestas, limites_cores[0], limites_cores[1], variacao=variacao)
+    rotulos = _set_rotulos(vertices, arestas, n_vertices_aleatorios, limites_rotulos[0], limites_rotulos[1], variacao=contraste)
+    cores = _set_cores(vertices, arestas, n_vertices_aleatorios, limites_cores[0], limites_cores[1], variacao=contraste)
 
     if imprimir:
         print("_" * 80)
@@ -441,4 +456,4 @@ def _gerar_plotagem(dict_simulacao: dict) -> None:
 
 
 if __name__ == "__main__":
-    FIOGO = gerar_simulacao(35, 15, plotar=True)
+    simulacao = gerar_simulacao(35, 15, plotar=True, n_vertices_aleatorios=35)
